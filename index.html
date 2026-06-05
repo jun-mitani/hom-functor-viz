@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>共変Hom関手 Hom(A, -) の可視化（150%拡大版）</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 30px;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        canvas {
+            background-color: #2b2b2b;
+            border-radius: 12px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+            margin-top: 15px;
+        }
+        .ui-container {
+            width: 1350px; /* 900 * 1.5 */
+            margin-top: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 22px;
+        }
+        #descriptionBox {
+            background-color: #333;
+            padding: 30px 45px;
+            border-radius: 9px;
+            border-left: 7.5px solid #64c8ff;
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 1.5em; /* 拡大 */
+            line-height: 1.6;
+            min-height: 165px;
+        }
+        .button-group {
+            display: flex;
+            gap: 30px;
+        }
+        button {
+            padding: 15px 45px;
+            font-size: 1.65em;
+            cursor: pointer;
+            background-color: #64c8ff;
+            color: #1e1e1e;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: all 0.2s;
+            min-width: 180px;
+        }
+        button:hover:not(:disabled) {
+            background-color: #4baee5;
+            transform: translateY(-3px);
+        }
+        button:disabled {
+            background-color: #444;
+            color: #777;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .math {
+            font-family: "Times New Roman", Times, serif;
+            font-style: italic;
+        }
+        h2 {
+            font-size: 2.25em;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>共変関手 <span class="math">Hom(A, -)</span> の振る舞い</h2>
+    <canvas id="homCanvas" width="1350" height="600"></canvas>
+    
+    <div class="ui-container">
+        <div id="descriptionBox"></div>
+        <div class="button-group">
+            <button id="prevBtn" disabled>前へ</button>
+            <button id="nextBtn">次へ</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('homCanvas');
+        const ctx = canvas.getContext('2d');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const descBox = document.getElementById('descriptionBox');
+
+        let step = 0;
+        let animatedStep = 0;
+        const MAX_STEP = 5;
+        let globalTick = 0;
+
+        const descriptions = [
+            "<strong>初期状態：対象とHom集合の対応</strong><br>左の圏 <span class='math'>C</span> において、対象 <span class='math'>A</span> から <span class='math'>X</span> への射の集合（Hom集合）を <span class='math'>Hom(A, X)</span> とします。ここでは3本の射があり、右側の <span class='math'>Set</span>（集合の圏）において、対応する「要素」として視覚化されています。",
+            "<strong>ステップ1：射と要素の同一視</strong><br>関手の核となる視点は「<span class='math'>C</span> の射」を「<span class='math'>Set</span> の要素（点）」として捉え直すことです。点滅によって、射 <span class='math'>gᵢ ∈ Hom(A, X)</span> と集合内の元の1対1対応を示しています。",
+            "<strong>ステップ2：新たな射と誘導される写像の出現</strong><br>対象 <span class='math'>X</span> から <span class='math'>Y</span> への射 <span class='math'>f</span> が現れました。関手は射を射へ写すため、これに対応して <span class='math'>Set</span> 側にも写像 <span class='math'>Hom(A, f)</span> の矢印が出現します。",
+            "<strong>ステップ3：誘導された写像 <span class='math'>f*</span> の実行</strong><br>写像 <span class='math'>Hom(A, f)</span> に沿って、要素が写像（複製）されます。元の要素 <span class='math'>gᵢ</span> はそのままに、それぞれが <span class='math'>f ∘ gᵢ</span> として <span class='math'>Y</span> の集合へと対応づけられます。",
+            "<strong>ステップ4：圏全体への俯瞰（マクロ視点）</strong><br>圏 <span class='math'>C</span> 全体の構造を俯瞰します。ここで、対象 <span class='math'>A</span> 自身への恒等射 <span class='math'>id_A</span> も明示されます。また、<span class='math'>A</span> から到達する射が存在しない対象 <span class='math'>U</span> などが現れました。",
+            "<strong>ステップ5：Hom関手による圏の構造抽出</strong><br><span class='math'>Hom(A, -)</span> は圏全体を「<span class='math'>A</span> からの視点」でスキャンします。<span class='math'>A→Z</span>への経路は計6通りあるため要素は6つになり、1本道で続く<span class='math'>W</span>へも6要素が写されます。<span class='math'>U</span>は空集合 ∅ になります。"
+        ];
+
+        function updateUI() {
+            descBox.innerHTML = descriptions[step];
+            prevBtn.disabled = (step === 0);
+            nextBtn.innerText = (step === MAX_STEP) ? "最初から" : "次へ";
+        }
+
+        prevBtn.addEventListener('click', () => {
+            if (step > 0) { step--; updateUI(); }
+        });
+
+        nextBtn.addEventListener('click', () => {
+            step = (step < MAX_STEP) ? step + 1 : 0;
+            updateUI();
+        });
+
+        updateUI();
+
+        // 150% スケールされた座標
+        const microP = {
+            A: { x: 150, y: 450 }, X: { x: 375, y: 150 }, Y: { x: 600, y: 450 },
+            SetA: { x: 975, y: 225 }, SetX: { x: 975, y: 225 }, SetY: { x: 1200, y: 450 },
+            Z: { x: 420, y: 300 }, W: { x: 600, y: 300 }, U: { x: 150, y: 150 },
+            SetZ: { x: 1080, y: 300 }, SetW: { x: 1260, y: 300 }, SetU: { x: 825, y: 120 }
+        };
+
+        const macroP = {
+            A: { x: 105, y: 300 }, X: { x: 270, y: 150 }, Y: { x: 270, y: 450 },
+            Z: { x: 420, y: 300 }, W: { x: 600, y: 300 }, U: { x: 150, y: 120 },
+            SetA: { x: 795, y: 300 }, SetX: { x: 945, y: 150 }, SetY: { x: 945, y: 450 },
+            SetZ: { x: 1095, y: 300 }, SetW: { x: 1260, y: 300 }, SetU: { x: 810, y: 120 }
+        };
+
+        // 曲率やオフセットも1.5倍
+        const morphisms = [
+            { curve: -52.5, offsetX: -18, offsetY: -15, label: "g₁" },
+            { curve: 0,     offsetX: 18,  offsetY: -22.5, label: "g₂" },
+            { curve: 52.5,  offsetX: 0,   offsetY: 22.5,  label: "g₃" }
+        ];
+
+        function lerp(start, end, t) {
+            return start + (end - start) * t;
+        }
+
+        function getP(name, t) {
+            const easeT = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+            return {
+                x: lerp(microP[name].x, macroP[name].x, easeT),
+                y: lerp(microP[name].y, macroP[name].y, easeT)
+            };
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            globalTick++;
+            
+            animatedStep += (step - animatedStep) * 0.08;
+
+            const phase1 = Math.min(Math.max(animatedStep, 0), 1);
+            const phase2 = Math.min(Math.max(animatedStep - 1, 0), 1);
+            const phase3 = Math.min(Math.max(animatedStep - 2, 0), 1);
+            const phase4 = Math.min(Math.max(animatedStep - 3, 0), 1);
+            const phase5 = Math.min(Math.max(animatedStep - 4, 0), 1);
+
+            // ステップ1の点滅用アルファ値（正弦波）
+            let blinkAlpha = 1;
+            if (step === 1) {
+                blinkAlpha = Math.abs(Math.sin(globalTick * 0.08)) * 0.7 + 0.3;
+            }
+
+            const P = {};
+            for (let key in microP) {
+                P[key] = getP(key, phase4);
+            }
+
+            drawBackground();
+
+            // --- 左側：圏 C ---
+            
+            if (phase4 > 0) {
+                const macroEdgeColor = `rgba(130, 130, 130, ${phase4 * 0.5})`;
+                drawArrow(P.U, P.X, macroEdgeColor, 2.25, "", false, 0);
+                drawArrow(P.X, P.Z, macroEdgeColor, 2.25, "", false, 0);
+                drawArrow(P.Y, P.Z, macroEdgeColor, 2.25, "", false, 0);
+                drawArrow(P.Z, P.W, macroEdgeColor, 2.25, "", false, 0);
+                
+                // 恒等射 id_A の描画
+                drawLoop(P.A, `rgba(180, 180, 180, ${phase4 * 0.8})`, 2.25, "id_A");
+            }
+
+            morphisms.forEach((m) => {
+                // 点滅を適用
+                const alpha = Math.max(0.3, 0.4 + phase1 * 0.6 - phase4 * 0.4) * blinkAlpha;
+                const gColor = `rgba(100, 200, 255, ${alpha})`;
+                drawArrow(P.A, P.X, gColor, 2.25 + phase1 * 2.25 - phase4 * 1.5, phase4 > 0.5 ? "" : m.label, false, m.curve);
+            });
+
+            if (phase2 > 0) {
+                const fColor = `rgba(255, 150, 100, ${phase2 - phase4 * 0.5})`;
+                drawArrow(P.X, P.Y, fColor, 3 + phase2 * 3 - phase4 * 3, phase4 > 0.5 ? "" : "f", false, 0);
+            }
+
+            if (phase3 > 0) {
+                morphisms.forEach((m) => {
+                    const fogColor = `rgba(200, 100, 255, ${phase3 - phase4 * 0.5})`;
+                    drawArrow(P.A, P.Y, fogColor, 2.25 + phase3 * 2.25 - phase4 * 1.5, phase4 > 0.5 ? "" : `f∘${m.label}`, false, m.curve);
+                });
+            }
+
+            if (phase5 > 0) {
+                const scanPulse = Math.sin(phase5 * Math.PI);
+                const scanColor1 = `rgba(100, 255, 150, ${scanPulse})`;
+                drawArrow(P.X, P.Z, scanColor1, 4.5, "", false, 0);
+                drawArrow(P.Y, P.Z, scanColor1, 4.5, "", false, 0);
+                
+                const phase5Delayed = Math.max(0, (phase5 - 0.3) * 1.42);
+                const scanColor2 = `rgba(255, 200, 100, ${Math.sin(phase5Delayed * Math.PI)})`;
+                drawArrow(P.Z, P.W, scanColor2, 4.5, "", false, 0);
+            }
+
+            drawNode(P.A, "A", "#ffffff");
+            drawNode(P.X, "X", "#ffffff");
+            drawNode(P.Y, "Y", "#ffffff");
+            
+            if (phase4 > 0) {
+                const nodeAlpha = `rgba(255, 255, 255, ${phase4})`;
+                drawNode(P.Z, "Z", nodeAlpha);
+                drawNode(P.W, "W", nodeAlpha);
+                drawNode(P.U, "U", nodeAlpha);
+            }
+
+            // --- 右側：集合の圏 Set ---
+            
+            drawSet(P.SetX, "Hom(A, X)", `rgba(100, 200, 255, ${0.2 - phase4 * 0.1})`);
+            drawSet(P.SetY, "Hom(A, Y)", `rgba(200, 100, 255, ${0.2 - phase4 * 0.1})`);
+
+            if (phase4 > 0) {
+                const setAlpha = phase4 * 0.1;
+                drawSet(P.SetA, "Hom(A, A)", `rgba(200, 200, 200, ${setAlpha})`, phase4);
+                drawSet(P.SetZ, "Hom(A, Z)", `rgba(100, 255, 150, ${setAlpha})`, phase4);
+                drawSet(P.SetW, "Hom(A, W)", `rgba(255, 200, 100, ${setAlpha})`, phase4);
+                
+                ctx.setLineDash([7.5, 7.5]);
+                drawSet(P.SetU, "Hom(A, U)", `rgba(50, 50, 50, ${setAlpha * 0.5})`, phase4, true);
+                ctx.setLineDash([]);
+            }
+
+            // Set側の写像（射）
+            if (phase2 > 0) {
+                const mapColor = `rgba(255, 150, 100, ${phase2 - phase4 * 0.6})`;
+                drawArrow(P.SetX, P.SetY, mapColor, 2.25 + phase2 * 0.75, phase4 > 0.5 ? "" : "Hom(A, f)", true, 0);
+            }
+
+            if (phase4 > 0) {
+                const mapColor = `rgba(130, 130, 130, ${phase4 * 0.4})`;
+                drawArrow(P.SetX, P.SetZ, mapColor, 2.25, "", true, 0);
+                drawArrow(P.SetY, P.SetZ, mapColor, 2.25, "", true, 0);
+                drawArrow(P.SetZ, P.SetW, mapColor, 2.25, "", true, 0);
+            }
+
+            // ミクロ時の粒子の描画と複製移動
+            morphisms.forEach((m) => {
+                const startX = P.SetX.x + m.offsetX;
+                const startY = P.SetX.y + m.offsetY;
+
+                // Hom(A, X) に留まる元の粒子（点滅を適用）
+                const baseAlpha = 1 - phase4 * 0.3;
+                drawParticle(startX, startY, `rgba(100, 200, 255, ${baseAlpha * blinkAlpha})`, phase1 * blinkAlpha);
+
+                // Phase3 で複製された粒子が Hom(A, Y) へ移動する
+                if (phase3 > 0) {
+                    const ease3 = phase3 < 0.5 ? 2 * phase3 * phase3 : 1 - Math.pow(-2 * phase3 + 2, 2) / 2;
+                    const endX = P.SetY.x + m.offsetX;
+                    const endY = P.SetY.y + m.offsetY;
+
+                    const currentX = startX + (endX - startX) * ease3;
+                    const currentY = startY + (endY - startY) * ease3;
+
+                    const r = 100 + 100 * ease3;
+                    const g = 200 - 100 * ease3;
+                    
+                    drawParticle(currentX, currentY, `rgba(${r}, ${g}, 255, ${1 - phase4 * 0.3})`, 1);
+                }
+            });
+
+            // マクロ時のスキャンエフェクト (Z と W にそれぞれ6つの要素を生成)
+            if (phase5 > 0) {
+                const pAlpha = phase5;
+                
+                // id_A の描画
+                drawParticle(P.SetA.x, P.SetA.y, `rgba(255, 255, 255, ${pAlpha})`, 0.8);
+                ctx.fillStyle = `rgba(255, 255, 255, ${pAlpha})`;
+                ctx.font = "italic 16.5px serif";
+                ctx.fillText("id", P.SetA.x + 12, P.SetA.y + 6);
+                
+                // Hom(A, Z) への伝播（X経由3 + Y経由3 = 計6つ）
+                const zAlpha = Math.min(1, phase5 * 1.5);
+                const rRadius = 18; // パーティクルの配置半径(1.5倍)
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i / 6) * Math.PI * 2;
+                    drawParticle(
+                        P.SetZ.x + Math.cos(angle) * rRadius, 
+                        P.SetZ.y + Math.sin(angle) * rRadius, 
+                        `rgba(100, 255, 150, ${zAlpha})`, 
+                        0.5
+                    );
+                }
+
+                // Hom(A, W) への伝播（Zからの1本道なので、6つの要素がそのままスライドする）
+                const wPhase = Math.max(0, (phase5 - 0.4) * 1.66);
+                const easeW = wPhase < 0.5 ? 2 * wPhase * wPhase : 1 - Math.pow(-2 * wPhase + 2, 2) / 2;
+
+                if (wPhase > 0) {
+                    for (let i = 0; i < 6; i++) {
+                        const angle = (i / 6) * Math.PI * 2;
+                        const startWX = P.SetZ.x + Math.cos(angle) * rRadius;
+                        const startWY = P.SetZ.y + Math.sin(angle) * rRadius;
+                        const endWX = P.SetW.x + Math.cos(angle) * rRadius;
+                        const endWY = P.SetW.y + Math.sin(angle) * rRadius;
+
+                        const currentWX = startWX + (endWX - startWX) * easeW;
+                        const currentWY = startWY + (endWY - startWY) * easeW;
+
+                        drawParticle(currentWX, currentWY, `rgba(255, 200, 100, ${wPhase})`, 0.5);
+                    }
+                }
+                
+                // Hom(A, U) の空集合表記
+                ctx.fillStyle = `rgba(150, 150, 150, ${pAlpha})`;
+                ctx.font = "21px sans-serif";
+                ctx.fillText("∅", P.SetU.x - 9, P.SetU.y + 7.5);
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        function drawBackground() {
+            ctx.fillStyle = "#333";
+            ctx.fillRect(705, 0, 1.5, 600); // 中央の境界線
+            ctx.fillStyle = "#aaa";
+            ctx.font = "italic 27px serif";
+            ctx.fillText("C", 30, 45);
+            ctx.font = "bold 24px sans-serif";
+            ctx.fillText("Set", 735, 45);
+        }
+
+        function drawNode(pos, label, colorStr) {
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 12, 0, Math.PI * 2);
+            ctx.fillStyle = colorStr;
+            ctx.fill();
+            ctx.fillStyle = colorStr;
+            ctx.font = "italic 22.5px serif";
+            ctx.fillText(label, pos.x - 30, pos.y + 7.5);
+        }
+
+        function drawSet(pos, label, bgColor, textAlpha = 1, isEmpty = false) {
+            ctx.beginPath();
+            ctx.ellipse(pos.x, pos.y, 67.5, 45, 0, 0, Math.PI * 2);
+            ctx.fillStyle = bgColor;
+            ctx.fill();
+            ctx.strokeStyle = `rgba(255,255,255,${0.3 * textAlpha})`;
+            ctx.stroke();
+            
+            ctx.fillStyle = `rgba(255,255,255,${textAlpha})`;
+            ctx.font = "italic 21px serif";
+            if(isEmpty) ctx.fillStyle = `rgba(150,150,150,${textAlpha})`;
+            ctx.fillText(label, pos.x - 57, pos.y - 57);
+        }
+
+        function drawParticle(x, y, colorStr, glowRatio) {
+            ctx.beginPath();
+            ctx.arc(x, y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = colorStr;
+            ctx.shadowBlur = 12 * glowRatio;
+            ctx.shadowColor = colorStr;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        // 恒等射を描画する関数
+        function drawLoop(pos, color, width, label) {
+            ctx.beginPath();
+            // ベジェ曲線を利用してループを描画
+            const cp1x = pos.x - 90;
+            const cp1y = pos.y - 90;
+            const cp2x = pos.x - 90;
+            const cp2y = pos.y + 90;
+
+            // ノードのエッジから開始・終了
+            ctx.moveTo(pos.x - 10, pos.y - 6);
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, pos.x - 10, pos.y + 6);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = width;
+            ctx.stroke();
+
+            // 矢尻
+            ctx.beginPath();
+            ctx.moveTo(pos.x - 8, pos.y + 6);
+            ctx.lineTo(pos.x - 22, pos.y - 2);
+            ctx.lineTo(pos.x - 18, pos.y + 16);
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            if (label) {
+                ctx.fillStyle = color;
+                ctx.font = "italic 21px serif";
+                ctx.fillText(label, pos.x - 105, pos.y + 7.5);
+            }
+        }
+
+        function drawArrow(from, to, color, width, label, dashed = false, curveOffset = 0) {
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            if (len < 0.1) return;
+            
+            const padding = 22.5;
+            const startX = from.x + (dx / len) * padding;
+            const startY = from.y + (dy / len) * padding;
+            const endX = to.x - (dx / len) * padding;
+            const endY = to.y - (dy / len) * padding;
+
+            const midX = (startX + endX) / 2;
+            const midY = (startY + endY) / 2;
+            const nx = -dy / len;
+            const ny = dx / len;
+            
+            const cpX = midX + nx * curveOffset * 2;
+            const cpY = midY + ny * curveOffset * 2;
+
+            ctx.beginPath();
+            if (dashed) ctx.setLineDash([6, 6]);
+            else ctx.setLineDash([]);
+            
+            ctx.moveTo(startX, startY);
+            if (curveOffset === 0) {
+                ctx.lineTo(endX, endY);
+            } else {
+                ctx.quadraticCurveTo(cpX, cpY, endX, endY);
+            }
+            
+            ctx.strokeStyle = color;
+            ctx.lineWidth = width;
+            ctx.stroke();
+
+            let angle = (curveOffset === 0) ? Math.atan2(dy, dx) : Math.atan2(endY - cpY, endX - cpX);
+
+            ctx.beginPath();
+            ctx.setLineDash([]);
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(endX - 12 * Math.cos(angle - Math.PI / 6), endY - 12 * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(endX - 12 * Math.cos(angle + Math.PI / 6), endY - 12 * Math.sin(angle + Math.PI / 6));
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            if (label && label !== "") {
+                const lx = curveOffset === 0 ? midX : midX + nx * curveOffset;
+                const ly = curveOffset === 0 ? midY : midY + ny * curveOffset;
+                ctx.fillStyle = "rgba(40, 40, 40, 0.7)";
+                
+                ctx.font = "italic 21px serif";
+                const textWidth = ctx.measureText(label).width;
+                ctx.fillRect(lx + 9, ly - 30, textWidth + 9, 27);
+                ctx.fillStyle = color;
+                ctx.fillText(label, lx + 12, ly - 9);
+            }
+        }
+
+        draw();
+    </script>
+</body>
+</html>
