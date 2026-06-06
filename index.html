@@ -6,7 +6,8 @@
     <style>
         body {
             margin: 0;
-            padding: 30px;
+            padding: 20px;
+            box-sizing: border-box;
             background-color: #1e1e1e;
             color: #ffffff;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -19,9 +20,11 @@
             border-radius: 12px;
             box-shadow: 0 6px 18px rgba(0,0,0,0.6);
             margin-top: 15px;
+            width: 100%;
+            height: auto;
         }
         .ui-container {
-            width: 1350px; /* 900 * 1.5 */
+            width: 100%;
             margin-top: 30px;
             display: flex;
             flex-direction: column;
@@ -95,20 +98,31 @@
         const nextBtn = document.getElementById('nextBtn');
         const descBox = document.getElementById('descriptionBox');
 
+        const CANVAS_BASE_W = 1350;
+        const CANVAS_BASE_H = 600;
+
+        function resizeCanvas() {
+            const availWidth = Math.min(canvas.parentElement.clientWidth, CANVAS_BASE_W);
+            canvas.style.width = availWidth + 'px';
+            canvas.style.height = Math.floor(availWidth * CANVAS_BASE_H / CANVAS_BASE_W) + 'px';
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
         let step = 0;
         let animatedStep = 0;
         const MAX_STEP = 5;
         let globalTick = 0;
 
-        const descriptions = [
+const descriptions = [
             "<strong>初期状態：対象とHom集合の対応</strong><br>左の圏 <span class='math'>C</span> において、対象 <span class='math'>A</span> から <span class='math'>X</span> への射の集合（Hom集合）を <span class='math'>Hom(A, X)</span> とします。ここでは3本の射があり、右側の <span class='math'>Set</span>（集合の圏）において、対応する「要素」として視覚化されています。",
             "<strong>ステップ1：射と要素の同一視</strong><br>関手の核となる視点は「<span class='math'>C</span> の射」を「<span class='math'>Set</span> の要素（点）」として捉え直すことです。点滅によって、射 <span class='math'>gᵢ ∈ Hom(A, X)</span> と集合内の元の1対1対応を示しています。",
             "<strong>ステップ2：新たな射と誘導される写像の出現</strong><br>対象 <span class='math'>X</span> から <span class='math'>Y</span> への射 <span class='math'>f</span> が現れました。関手は射を射へ写すため、これに対応して <span class='math'>Set</span> 側にも写像 <span class='math'>Hom(A, f)</span> の矢印が出現します。",
             "<strong>ステップ3：誘導された写像 <span class='math'>f*</span> の実行</strong><br>写像 <span class='math'>Hom(A, f)</span> に沿って、要素が写像（複製）されます。元の要素 <span class='math'>gᵢ</span> はそのままに、それぞれが <span class='math'>f ∘ gᵢ</span> として <span class='math'>Y</span> の集合へと対応づけられます。",
             "<strong>ステップ4：圏全体への俯瞰（マクロ視点）</strong><br>圏 <span class='math'>C</span> 全体の構造を俯瞰します。ここで、対象 <span class='math'>A</span> 自身への恒等射 <span class='math'>id_A</span> も明示されます。また、<span class='math'>A</span> から到達する射が存在しない対象 <span class='math'>U</span> などが現れました。",
-            "<strong>ステップ5：Hom関手による圏の構造抽出</strong><br><span class='math'>Hom(A, -)</span> は圏全体を「<span class='math'>A</span> からの視点」でスキャンします。<span class='math'>A→Z</span>への経路は計6通りあるため要素は6つになり、1本道で続く<span class='math'>W</span>へも6要素が写されます。<span class='math'>U</span>は空集合 ∅ になります。"
+            "<strong>ステップ5：Hom関手による圏の構造抽出（米田の視点）</strong><br><span class='math'>Hom(A, -)</span> という関手は、対象 <span class='math'>A</span> を観測地点として圏全体を測量する「探知機」として機能します。隠れた関係式がないと仮定すると、<span class='math'>A</span> から <span class='math'>Z</span> への独立した経路は6通り存在するため要素は6つになり、さらに <span class='math'>W</span> へも構造を保ったまま6要素が写像されます。到達できない <span class='math'>U</span> が空集合 ∅ になる点も含め、対象そのものではなく「他の対象との関係性」を通して圏を理解する――これが後に学ぶ『米田の補題』の核心となる視点です。"
         ];
-
         function updateUI() {
             descBox.innerHTML = descriptions[step];
             prevBtn.disabled = (step === 0);
